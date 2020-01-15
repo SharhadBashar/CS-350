@@ -398,7 +398,6 @@ cmd_kheapstats(int nargs, char **args)
 
 /*
  * Command to enable output of debugging messages of type DB_THREADS
- * 
  */
 static
 int
@@ -407,9 +406,7 @@ cmd_dth(int nargs, char **args)
 	(void) nargs;
 	(void) args;
 
-	kprintf("%d", dbflags);
-	dbflags = 0x0010;
-	kprintf("%d", dbflags);
+	dbflags = DB_THREADS;
 
 	return 0;
 	
