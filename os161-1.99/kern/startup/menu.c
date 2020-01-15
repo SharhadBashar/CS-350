@@ -396,6 +396,24 @@ cmd_kheapstats(int nargs, char **args)
 	return 0;
 }
 
+/*
+ * Command to enable output of debugging messages of type DB_THREADS
+ * 
+ */
+static
+int
+cmd_dth(int nargs, char **args)
+{
+	(void) nargs;
+	(void) args;
+
+	kprintf("%d", dbflags);
+	dbflags = 0x0010;
+	kprintf("%d", dbflags);
+
+	return 0;
+	
+}
 ////////////////////////////////////////
 //
 // Menus.
@@ -437,6 +455,7 @@ static const char *opsmenu[] = {
 	"[sync]    Sync filesystems          ",
 	"[panic]   Intentional panic         ",
 	"[q]       Quit and shut down        ",
+	"[dth]	   Enable msg of type DB_THREADS",
 	NULL
 };
 
@@ -549,6 +568,7 @@ static struct {
 	{ "q",		cmd_quit },
 	{ "exit",	cmd_quit },
 	{ "halt",	cmd_quit },
+	{ "dth",	cmd_dth},
 
 #if OPT_SYNCHPROBS
 	/* in-kernel synchronization problem(s) */
