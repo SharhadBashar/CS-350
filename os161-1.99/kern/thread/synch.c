@@ -257,20 +257,13 @@ cv_create(const char *name)
         }
 
         cv->cv_name = kstrdup(name);
-        if (cv->cv_name==NULL) {
+        if (cv->cv_name == NULL) {
                 kfree(cv);
                 return NULL;
         }
         
         // add stuff here as needed
-        cv->cv_lock = lock_create(cv->cv_name);
         cv->cv_wchan = wchan_create(cv->cv_name);
-
-        if (cv->cv_lock == NULL) {
-                kfree(cv->cv_lock);
-                kfree(cv);
-                return NULL;
-        }
 
         if (cv->cv_wchan == NULL) {
                 kfree(cv->cv_wchan);
@@ -289,7 +282,6 @@ cv_destroy(struct cv *cv)
 
         // add stuff here as needed
         wchan_destroy(cv->cv_wchan);
-        lock_destroy(cv->cv_lock);
 
         kfree(cv->cv_name);
         kfree(cv);
@@ -303,16 +295,10 @@ cv_wait(struct cv *cv, struct lock *lock)
         // (void)lock;  // suppress warning until code gets written
         KASSERT(cv != NULL);
         KASSERT(lock != NULL);
-
-        lock_acquire(cv->cv_lock);
-
         KASSERT(lock_do_i_hold(lock));
 
-        lock_release(lock);
         wchan_lock(cv->cv_wchan);
-
-        lock_release(cv->cv_lock);
-
+        lock_release(lock);
         wchan_sleep(cv->cv_wchan);
         lock_acquire(lock);
 }
@@ -325,16 +311,9 @@ cv_signal(struct cv *cv, struct lock *lock)
 	// (void)lock;  // suppress warning until code gets written
         KASSERT(cv != NULL);
         KASSERT(lock != NULL);
-
-        lock_acquire(cv->cv_lock);
-
         KASSERT(lock_do_i_hold(lock));
 
-        if (!wchan_isempty(cv->cv_wchan)){
-                wchan_wakeone(cv->cv_wchan);
-        }
-
-        lock_release(cv->cv_lock);
+        wchan_wakeone(cv->cv_wchan);
 }
 
 void
@@ -345,14 +324,7 @@ cv_broadcast(struct cv *cv, struct lock *lock)
 	// (void)lock;  // suppress warning until code gets written
         KASSERT(cv != NULL);
         KASSERT(lock != NULL);
-
-        lock_acquire(cv->cv_lock);
-
         KASSERT(lock_do_i_hold(lock));
 
-        if (!wchan_isempty(cv->cv_wchan)){
-                wchan_wakeall(cv->cv_wchan);
-        }
-
-        lock_release(cv->cv_lock);
+        wchan_wakeall(cv->cv_wchan);
 }

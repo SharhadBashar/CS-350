@@ -123,7 +123,6 @@ struct cv {
         // (don't forget to mark things volatile as needed)
         // A1
         struct wchan *cv_wchan;
-        struct lock *cv_lock;
 };
 
 struct cv *cv_create(const char *name);
