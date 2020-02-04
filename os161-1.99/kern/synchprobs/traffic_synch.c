@@ -3,6 +3,7 @@
 #include <synchprobs.h>
 #include <synch.h>
 #include <opt-A1.h>
+#include <array.h>
 
 /* 
  * This simple default synchronization mechanism allows only vehicle at a time
@@ -17,11 +18,27 @@
  * primitives, e.g., semaphores, locks, condition variables.   You are also free to 
  * declare other global variables if your solution requires them.
  */
+static struct lock *lock;
 
-/*
- * replace this with declarations of any synchronization and other variables you need here
- */
-static struct semaphore *intersectionSem;
+static struct cv *cvN;
+static struct cv *cvE;
+static struct cv *cvS;
+static struct cv *cvW;
+
+static struct array *cars;
+typedef struct car {
+  int id;
+  Direction origin;
+}car;
+
+//Volatile
+static volatile int vId;
+static volatile int count;
+static volatile int intersectionCount;
+static volatile bool n;
+static volatile bool e;
+static volatile bool s;
+static volatile bool w;
 
 
 /* 
@@ -34,11 +51,36 @@ static struct semaphore *intersectionSem;
 void
 intersection_sync_init(void)
 {
-  /* replace this default implementation with your own implementation */
+  lock = lock_create("Lock");
+  cvN = cv_create("North");
+  cvE = cv_create("East");
+  cvS = cv_create("South");
+  cvW = cv_create("West"); 
+  cars = array_create();
+  array_init(cars);
 
-  intersectionSem = sem_create("intersectionSem",1);
-  if (intersectionSem == NULL) {
-    panic("could not create intersection semaphore");
+  vId = 0;
+  count = 0;
+  intersectionCount = 0;
+  n = true; e = true; s = true; w = true;
+
+  if (lock == NULL) {
+    panic("Could not create Intersection Lock");
+  }
+  if (cvN == NULL) {
+    panic ("Could not create North Conditional Variable");
+  }
+  if (cvE == NULL) {
+    panic ("Could not create East Conditional Variable");
+  }
+  if (cvS == NULL) {
+    panic ("Could not create South Conditional Variable");
+  }
+  if (cvW == NULL) {
+    panic ("Could not create West Conditional Variable");
+  }
+  if (cars == NULL) {
+    panic ("Could not create the array for cars");
   }
   return;
 }
@@ -53,9 +95,19 @@ intersection_sync_init(void)
 void
 intersection_sync_cleanup(void)
 {
-  /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
-  sem_destroy(intersectionSem);
+  KASSERT(lock != NULL);
+  KASSERT(cvN != NULL);
+  KASSERT(cvE != NULL);
+  KASSERT(cvS != NULL);
+  KASSERT(cvW != NULL);
+  KASSERT(cars != NULL);
+
+  lock_destroy(lock);
+  cv_destroy(cvN);
+  cv_destroy(cvE);
+  cv_destroy(cvS);
+  cv_destroy(cvW);
+  array_destroy(cars);
 }
 
 
@@ -75,11 +127,57 @@ intersection_sync_cleanup(void)
 void
 intersection_before_entry(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
   (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  P(intersectionSem);
+
+  KASSERT(lock != NULL);
+  KASSERT(cvN != NULL);
+  KASSERT(cvE != NULL);
+  KASSERT(cvS != NULL);
+  KASSERT(cvW != NULL);
+  KASSERT(cars != NULL);
+
+  lock_acquire(lock);
+
+    car c = {
+      .id = vId++,
+      .origin = origin
+    };
+    array_add(cars, &c, NULL);
+
+    if (origin == 0) {
+      while (!n) cv_wait(cvN, lock);
+      e = false; s = false; w = false;
+    }
+    
+    else if (origin == 1) {
+      while (!e) cv_wait(cvE, lock);
+      n = false; s = false; w = false;
+    }
+
+    else if (origin == 2) {
+      while (!s) cv_wait(cvS, lock);
+      n = false; e = false; w = false;
+    }
+
+    else if (origin == 3) {
+      while(!w) cv_wait(cvW, lock);
+      n = false; e = false; s = false;
+    }
+    intersectionCount++;
+
+    for(unsigned int i = 0; i < array_num(cars); i++) {
+      int id = ((car*)array_get(cars, i))->id;
+      if (c.id == id) {
+        array_remove(cars, i);
+        break;
+      }
+    }
+
+    if (++count > 10) {
+      n = false; e = false; s = false; w = false;
+      count = 0;
+    }
+  lock_release(lock);
 }
 
 
@@ -97,9 +195,137 @@ intersection_before_entry(Direction origin, Direction destination)
 void
 intersection_after_exit(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
   (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  V(intersectionSem);
+
+  KASSERT(lock != NULL);
+  KASSERT(cvN != NULL);
+  KASSERT(cvE != NULL);
+  KASSERT(cvS != NULL);
+  KASSERT(cvW != NULL);
+  KASSERT(cars != NULL);
+
+  lock_acquire(lock);
+    intersectionCount--;
+    if (intersectionCount == 0) {
+      if (origin == 0) {
+        n = false;
+        if (array_num(cars) > 0) {
+          Direction origin = ((car*)array_get(cars, 0))->origin;
+          switch(origin) {
+            case 0:
+              n = true;
+              cv_broadcast(cvN, lock);
+              break;
+            case 1:
+              e = true;
+              cv_broadcast(cvE, lock);
+              break;
+            case 2:
+              s = true;
+              cv_broadcast(cvS, lock);
+              break;
+            case 3:
+              w = true;
+              cv_broadcast(cvW, lock);
+              break;
+            default:
+              panic("Origin = 0 error");
+          }
+        }
+        else {
+          n = true; e = true; s = true; w = true;
+        }
+      }
+
+      else if (origin == 1) {
+        e = false;
+        if (array_num(cars) > 0) {
+          Direction origin = ((car*)array_get(cars, 0))->origin;
+          switch(origin) {
+            case 0:
+              n = true;
+              cv_broadcast(cvN, lock);
+              break;
+            case 1:
+              e = true;
+              cv_broadcast(cvE, lock);
+              break;
+            case 2:
+              s = true;
+              cv_broadcast(cvS, lock);
+              break;
+            case 3:
+              w = true;
+              cv_broadcast(cvW, lock);
+              break;
+            default:
+              panic("Origin = 1 error");
+          }
+        }
+        else {
+          n = true; e = true; s = true; w = true;
+        }
+      }
+
+      else if (origin == 2) {
+        s = false;
+        if (array_num(cars) > 0) {
+          Direction origin = ((car*)array_get(cars, 0))->origin;
+          switch(origin) {
+            case 0:
+              n = true;
+              cv_broadcast(cvN, lock);
+              break;
+            case 1:
+              e = true;
+              cv_broadcast(cvE, lock);
+              break;
+            case 2:
+              s = true;
+              cv_broadcast(cvS, lock);
+              break;
+            case 3:
+              w = true;
+              cv_broadcast(cvW, lock);
+              break;
+            default:
+              panic("Origin = 2 error");
+          }
+        }
+        else {
+          n = true; e = true; s = true; w = true;
+        }
+      }
+
+      else if (origin == 3) {
+        w = false;
+        if (array_num(cars) > 0) {
+          Direction origin = ((car*)array_get(cars, 0))->origin;
+          switch(origin) {
+            case 0:
+              n = true;
+              cv_broadcast(cvN, lock);
+              break;
+            case 1:
+              e = true;
+              cv_broadcast(cvE, lock);
+              break;
+            case 2:
+              s = true;
+              cv_broadcast(cvS, lock);
+              break;
+            case 3:
+              w = true;
+              cv_broadcast(cvW, lock);
+              break;
+            default:
+              panic("Origin = 3 error");
+          }
+        }
+        else {
+          n = true; e = true; s = true; w = true;
+        }
+      }
+    }
+  lock_release(lock);
 }

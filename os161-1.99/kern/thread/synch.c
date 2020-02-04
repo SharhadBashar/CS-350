@@ -220,7 +220,7 @@ lock_release(struct lock *lock)
 
 	// (void)lock;  // suppress warning until code gets written
 	KASSERT(lock != NULL);
-	KASSERT(lock_do_i_hold(lock)); //check here
+	KASSERT(lock_do_i_hold(lock));
 
 	spinlock_acquire(&lock->lk_lock);
 	lock->lk_held = 0;
