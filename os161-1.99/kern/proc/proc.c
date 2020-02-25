@@ -49,7 +49,9 @@
 #include <vnode.h>
 #include <vfs.h>
 #include <synch.h>
-#include <kern/fcntl.h>  
+#include <kern/fcntl.h>
+#include <array.h>
+#include "opt-A2.h"
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -69,7 +71,11 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
-
+#ifdef OPT_A2
+volatile int globalPid;
+struct lock *globalPidLock;
+struct lock *exitLock;
+#endif
 
 /*
  * Create a proc structure.
@@ -103,6 +109,18 @@ proc_create(const char *name)
 	proc->console = NULL;
 #endif // UW
 
+#if OPT_A2
+	proc->lockChild = lock_create("lockChild");
+	if (proc->lockChild == NULL) panic("Cannot create lockChild");
+	proc->cvChild = cv_create("cvChild");
+	if (proc->cvChild == NULL) panic("Cannot create cvChild");
+	proc->dead = false;
+	proc->pid = 2;
+	proc->parent = NULL;
+	proc->child = array_create();
+	if (proc->child == NULL) panic("cannot create child array");
+	array_init(proc->child);
+#endif
 	return proc;
 }
 
@@ -208,6 +226,12 @@ proc_bootstrap(void)
     panic("could not create no_proc_sem semaphore\n");
   }
 #endif // UW 
+
+#ifdef OPT_A2
+	globalPid = 3;
+	globalPidLock = lock_create("globalPidLock");
+	exitLock = lock_create("exitLock");
+#endif
 }
 
 /*
@@ -270,6 +294,24 @@ proc_create_runprogram(const char *name)
 	proc_count++;
 	V(proc_count_mutex);
 #endif // UW
+
+#ifdef OPT_A2
+	proc->lockChild = lock_create("lockChild");
+	if (proc->lockChild == NULL) panic("Cannot create lockChild");
+	proc->cvChild = cv_create("cvChild");
+	if (proc->cvChild == NULL)panic("Cannot create cvChild");
+	proc->dead = false;
+	lock_acquire(globalPidLock);
+	proc->pid = ++globalPid;
+	lock_release(globalPidLock);
+	proc->parent = NULL;
+	array_add(kproc->child, proc, NULL);
+	proc->child = array_create();
+	if (proc->child == NULL) panic("cannot create child array");
+	array_init(proc->child);
+	proc->lockProc = lock_create("lockProc");
+	if (proc->lockChild == NULL) panic("Cannot create lock");
+#endif
 
 	return proc;
 }
