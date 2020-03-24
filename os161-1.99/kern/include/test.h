@@ -82,8 +82,11 @@ int mallocstress(int, char **);
 int nettest(int, char **);
 
 /* Routine for running a user-level program. */
+#if OPT_A2
+int runprogram(char *progname, char **args);
+#else
 int runprogram(char *progname);
-
+#endif
 /* Kernel menu system. */
 void menu(char *argstr);
 

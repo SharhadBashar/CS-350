@@ -13,6 +13,8 @@
 #include <synch.h>
 #include <spinlock.h>
 #include <machine/trapframe.h>
+#include <kern/fcntl.h>
+#include <vfs.h>
 #include "opt-A2.h"
 /* this implementation of sys__exit does not do anything with the exit code */
 /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -234,5 +236,131 @@ int sys_fork(struct trapframe *tf, int *retval)
   }
   *retval = childProc->pid;
   return 0;
+}
+
+int sys_execv(const_userptr_t program, userptr_t *args)
+{
+  int result;
+  if (program == NULL)
+  {
+    return ENOENT;
+  }
+  int progname_len = strlen((char *)program) + 1;
+  char *progname = kmalloc(progname_len * sizeof(char));
+  result = copyin(program, (void *)progname, progname_len);
+  if (result)
+  {
+    return result;
+  }
+  int argc = 0;
+  while (args[argc] != NULL)
+  {
+    argc++;
+  }
+  argc++;
+  char **argv = kmalloc(argc * sizeof(char *));
+  argv[0] = progname;
+  for (int i = 0; i < argc - 1; i++)
+  {
+    int arg_size = strlen((char *)args[i]) + 1;
+    argv[i + 1] = kmalloc(arg_size * sizeof(char));
+    result = copyinstr(args[i], argv[i + 1], arg_size, NULL);
+    if (result)
+    {
+      return result;
+    }
+  }
+  struct addrspace *as;
+  struct vnode *v;
+  vaddr_t entrypoint, stackptr;
+  result = vfs_open(progname, O_RDONLY, 0, &v);
+  if (result)
+  {
+    for (int i = 0; i < argc; i++)
+    {
+      kfree(argv[i]);
+    }
+    kfree(argv);
+    return result;
+  }
+  as = as_create();
+  if (as == NULL)
+  {
+    vfs_close(v);
+    for (int i = 0; i < argc; i++)
+    {
+      kfree(argv[i]);
+    }
+    kfree(argv);
+    return ENOMEM;
+  }
+  curproc_setas(NULL);
+  KASSERT(curproc_getas() == NULL);
+  curproc_setas(as);
+  as_activate();
+  result = load_elf(v, &entrypoint);
+  if (result)
+  {
+    vfs_close(v);
+    for (int i = 0; i < argc; i++)
+    {
+      kfree(argv[i]);
+    }
+    kfree(argv);
+    return result;
+  }
+  vfs_close(v);
+  result = as_define_stack(as, &stackptr);
+  if (result)
+  {
+    for (int i = 0; i < argc; i++)
+    {
+      kfree(argv[i]);
+    }
+    kfree(argv);
+    return result;
+  }
+  vaddr_t argv_ptr[argc + 1];
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    stackptr -= strlen(argv[i]) + 1;
+    result = copyoutstr(argv[i], (userptr_t)stackptr, strlen(argv[i]) + 1, NULL);
+    if (result)
+    {
+      for (int i = 0; i < argc; i++)
+      {
+        kfree(argv[i]);
+      }
+      kfree(argv);
+      return result;
+    }
+    argv_ptr[i] = stackptr;
+  }
+  argv_ptr[argc] = 0;
+  stackptr = ROUNDUP(stackptr - 8, 8);
+  stackptr -= ROUNDUP((argc + 1) * sizeof(char *), 8);
+  vaddr_t argvptr = stackptr;
+  for (int i = 0; i <= argc; i++)
+  {
+    result = copyout(&argv_ptr[i], (userptr_t)argvptr, sizeof(vaddr_t));
+    if (result)
+    {
+      for (int i = 0; i < argc; i++)
+      {
+        kfree(argv[i]);
+      }
+      kfree(argv);
+      return result;
+    }
+    argvptr += sizeof(char *);
+  }
+  for (int i = 0; i < argc; i++)
+  {
+    kfree(argv[i]);
+  }
+  kfree(argv);
+  enter_new_process(argc, (userptr_t)stackptr, stackptr, entrypoint);
+  panic("Enter new process returned");
+  return EINVAL;
 }
 #endif

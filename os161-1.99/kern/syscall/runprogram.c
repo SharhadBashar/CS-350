@@ -44,6 +44,8 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <copyinout.h>
+#include "opt-A2.h"
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -51,6 +53,71 @@
  *
  * Calls vfs_open on progname and thus may destroy it.
  */
+
+#if OPT_A2
+int
+runprogram(char *progname, char **args)
+{
+    if (progname == NULL) return ENOENT;
+
+    int argc = 0;
+	struct addrspace *as;
+	struct vnode *v;
+	vaddr_t entrypoint, stackptr;
+	int result;
+
+    while (args[argc] != NULL) {
+        argc++;
+    }
+	result = vfs_open(progname, O_RDONLY, 0, &v);
+	if (result) {
+		return result;
+	}
+	KASSERT(curproc_getas() == NULL);
+	as = as_create();
+	if (as == NULL) {
+		vfs_close(v);
+		return ENOMEM;
+	}
+	curproc_setas(as);
+	as_activate();
+
+	result = load_elf(v, &entrypoint);
+	if (result) {
+		vfs_close(v);
+		return result;
+	}
+	vfs_close(v);
+	result = as_define_stack(as, &stackptr);
+	if (result) return result;
+
+    vaddr_t args_ptr[argc + 1];
+    for (int i = argc - 1; i >= 0; i--) {
+        stackptr -= strlen(args[i]) + 1;
+        result = copyoutstr(args[i], (userptr_t)stackptr, strlen(args[i]) + 1, NULL);
+        if(result) {
+            return result;
+        }
+        args_ptr[i] = stackptr;
+    }
+    args_ptr[argc] = 0;
+
+    stackptr = ROUNDUP(stackptr - 8, 8);
+    stackptr -= ROUNDUP((argc + 1)*sizeof(char *), 8);
+    vaddr_t argvptr = stackptr;
+    for (int i = 0; i <= argc; i++) {
+        result = copyout(&args_ptr[i], (userptr_t)argvptr, sizeof(vaddr_t));
+        if(result) {
+            return result;
+        }
+        argvptr += sizeof(char *);
+    }
+	enter_new_process(argc, (userptr_t)stackptr, stackptr, entrypoint);
+
+	panic("Enter new process returned");
+	return EINVAL;
+}
+#else
 int
 runprogram(char *progname)
 {
@@ -105,4 +172,4 @@ runprogram(char *progname)
 	panic("enter_new_process returned\n");
 	return EINVAL;
 }
-
+#endif

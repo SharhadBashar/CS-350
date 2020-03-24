@@ -5,8 +5,12 @@
 ############################################
 
 # To use this file, $ source setup.sh
+#osconfig
+#osbuild
+#osinstall
+#osrun
 
-SUBMIT="2a" # Modify this for different assignments
+SUBMIT="2b" # Modify this for different assignments
 
 export PATH; PATH=`/bin/showpath /u/cs350/sys161/bin /u/cs350/bin standard`
 

@@ -71,7 +71,7 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
-#ifdef OPT_A2
+#if OPT_A2
 volatile int globalPid;
 struct lock *globalPidLock;
 struct lock *exitLock;
@@ -182,7 +182,7 @@ proc_destroy(struct proc *proc)
 #endif // UW
 
 	threadarray_cleanup(&proc->p_threads);
-	spinlock_cleanup(&proc->p_lock);
+	// spinlock_cleanup(&proc->p_lock);
 
 	kfree(proc->p_name);
 	kfree(proc);
@@ -227,7 +227,7 @@ proc_bootstrap(void)
   }
 #endif // UW 
 
-#ifdef OPT_A2
+#if OPT_A2
 	globalPid = 3;
 	globalPidLock = lock_create("globalPidLock");
 	exitLock = lock_create("exitLock");
@@ -295,7 +295,7 @@ proc_create_runprogram(const char *name)
 	V(proc_count_mutex);
 #endif // UW
 
-#ifdef OPT_A2
+#if OPT_A2
 	proc->lockChild = lock_create("lockChild");
 	if (proc->lockChild == NULL) panic("Cannot create lockChild");
 	proc->cvChild = cv_create("cvChild");

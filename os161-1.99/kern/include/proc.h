@@ -71,16 +71,16 @@ struct proc {
 
 	/* add more material here as needed */
 
-#ifdef OPT_A2
+#if OPT_A2
 	pid_t pid;                      
-    struct proc *parent;           
-    struct lock *lockChild;           
-    struct lock *lockProc;
-    struct cv *cvChild;            
-    struct array *child;           
-    int exitStatus;
-    int exitCode;
-    bool dead;                      
+  struct proc *parent;           
+  struct lock *lockChild;           
+  struct lock *lockProc;
+  struct cv *cvChild;            
+  struct array *child;           
+  int exitStatus;
+  int exitCode;
+  bool dead;                      
 #endif
 };
 
@@ -92,7 +92,7 @@ extern struct proc *kproc;
 extern struct semaphore *no_proc_sem;
 #endif // UW
 
-#ifdef OPT_A2
+#if OPT_A2
 extern volatile int globalPid;
 extern struct lock *globalPidLock;
 extern struct lock *exitLock;
