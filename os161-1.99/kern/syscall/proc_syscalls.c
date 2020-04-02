@@ -16,6 +16,7 @@
 #include <kern/fcntl.h>
 #include <vfs.h>
 #include "opt-A2.h"
+#include "opt-A3.h"
 /* this implementation of sys__exit does not do anything with the exit code */
 /* this needs to be fixed to get exit() and waitpid() working properly */
 
@@ -38,6 +39,12 @@ void sys__exit(int exitcode)
   }
   p->exitStatus = _MKWAIT_EXIT(exitcode);
   p->exitCode = exitcode;
+#endif
+#if OPT_A3
+  if (exitcode < 0) {
+    p->exitStatus = _MKWAIT_SIG(exitcode*(-1)); 
+    p->exitCode = exitcode*(-1);
+  }
 #endif
   /* for now, just include this to keep the compiler from complaining about
      an unused variable */

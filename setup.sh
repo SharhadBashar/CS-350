@@ -10,7 +10,7 @@
 #osinstall
 #osrun
 
-SUBMIT="2b" # Modify this for different assignments
+SUBMIT="3" # Modify this for different assignments
 
 export PATH; PATH=`/bin/showpath /u/cs350/sys161/bin /u/cs350/bin standard`
 
